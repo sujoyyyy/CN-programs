@@ -26,9 +26,7 @@ int main()
 		bzero(buff, 255);
 		n = recvfrom(c_sock, buff, sizeof(buff), 0, (struct sockaddr*)&client, client_len);
 		printf("Server: %s\n", buff);
-		int i = strncmp("bye", buff, 3);
-		if(i==0)
-			break;
+		
 	}
 
 	close(c_sock);

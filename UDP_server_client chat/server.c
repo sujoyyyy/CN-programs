@@ -26,9 +26,7 @@ int main(int argc, char *argv[])
 		bzero(buff, 255);
 		fgets(buff, 255, stdin);
 		n = sendto(s_sock, buff, sizeof(buff), 0, (struct sockaddr*)&client, sizeof(client));
-		int i = strncmp("bye", buff, 3);
-		if(i==0)
-			break;
+		
 		
 	}
 	close(s_sock);

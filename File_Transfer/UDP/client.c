@@ -1,93 +1,222 @@
-// client code for UDP socket programming 
-#include <arpa/inet.h> 
-#include <netinet/in.h> 
-#include <stdio.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <sys/socket.h> 
-#include <sys/types.h> 
-#include <unistd.h> 
+#include<stdio.h>
+#include<stdlib.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<netinet/udp.h>
+#include<arpa/inet.h>
+#include<sys/types.h>
+#include<string.h> /* memset */
+#include<unistd.h> /* close */
+#include<time.h>
 
-#define IP_PROTOCOL 0 
-#define IP_ADDRESS "127.0.0.1" // localhost 
-#define PORT_NO 15050 
-#define NET_BUF_SIZE 32 
-#define cipherKey 'S' 
-#define sendrecvflag 0 
+typedef int bool;
+#define true 1
+#define false 0
 
-// function to clear buffer 
-void clearBuf(char* b) 
-{ 
-	int i; 
-	for (i = 0; i < NET_BUF_SIZE; i++) 
-		b[i] = '\0'; 
-} 
+#define BUFSIZE 101
+#define PACKET_SIZE 100
 
-// function for decryption 
-char Cipher(char ch) 
-{ 
-	return ch ^ cipherKey; 
-} 
+#define DEFAULT_PORT 3000
+#define PORT 67
 
-// function to receive file 
-int recvFile(char* buf, int s) 
-{ 
-	int i; 
-	char ch; 
-	for (i = 0; i < s; i++) { 
-		ch = buf[i]; 
-		ch = Cipher(ch); 
-		if (ch == EOF) 
-			return 1; 
-		else
-			printf("%c", ch); 
-	} 
-	return 0; 
-} 
+#define SOCKET_ERROR -1
+#define SOCKET_READ_TIMEOUT_SEC 2
+#define LIMITE 10
 
-// driver code 
-int main() 
-{ 
-	int sockfd, nBytes; 
-	struct sockaddr_in addr_con; 
-	int addrlen = sizeof(addr_con); 
-	addr_con.sin_family = AF_INET; 
-	addr_con.sin_port = htons(PORT_NO); 
-	addr_con.sin_addr.s_addr = inet_addr(IP_ADDRESS); 
-	char net_buf[NET_BUF_SIZE]; 
-	FILE* fp; 
+unsigned long packets_to_send;
 
-	// socket() 
-	sockfd = socket(AF_INET, SOCK_DGRAM, 
-					IP_PROTOCOL); 
 
-	if (sockfd < 0) 
-		printf("\nfile descriptor not received!!\n"); 
-	else
-		printf("\nfile descriptor %d received\n", sockfd); 
+void kill(char *msg){
+    perror(msg);
+    exit(1);
+}
 
-	while (1) { 
-		printf("\nPlease enter file name to receive:\n"); 
-		scanf("%s", net_buf); 
-		sendto(sockfd, net_buf, NET_BUF_SIZE, 
-			sendrecvflag, (struct sockaddr*)&addr_con, 
-			addrlen); 
+unsigned long fsize(FILE **f){
+    fseek(*f, 0, SEEK_END);
+    unsigned long len = (unsigned long)ftell(*f);
+    rewind(*f);
+    return len;
+}
 
-		printf("\n---------Data Received---------\n"); 
 
-		while (1) { 
-			// receive 
-			clearBuf(net_buf); 
-			nBytes = recvfrom(sockfd, net_buf, NET_BUF_SIZE, 
-							sendrecvflag, (struct sockaddr*)&addr_con, 
-							&addrlen); 
+int copy_size(unsigned long file_size, int send_qtd){
+    if(file_size > PACKET_SIZE * send_qtd)
+        return PACKET_SIZE;
+    else
+        return PACKET_SIZE + file_size - (PACKET_SIZE*send_qtd);
+}
 
-			// process 
-			if (recvFile(net_buf, NET_BUF_SIZE)) { 
-				break; 
-			} 
-		} 
-		printf("\n-------------------------------\n"); 
-	} 
-	return 0; 
-} 
+
+int hasContent(){
+    if(packets_to_send == 0)
+        return 0;
+    packets_to_send--;
+    return 1;
+}
+
+
+unsigned long packets_counter(unsigned long file_size){
+    return (file_size/PACKET_SIZE) + 1;
+}
+char ack(char atual){
+    if (atual == '1')
+        return '0';
+    return '1';
+}
+int main(int argc, char *argv[]){
+
+    if(argc != 4){
+        kill("Missing arguments! <filename><ip><port>");
+    }
+
+    int sock, rv, packs_to_expire = 0, on = 1;
+    socklen_t addr_len = sizeof(struct sockaddr_in);
+    unsigned long file_size, start = 0, size, packets_send = 0;
+    char atual_ack = '0';
+    struct sockaddr_in my_address, other_address;
+    FILE *fd;
+    char buffer[BUFSIZE];
+    bool enable_send = true;
+    ssize_t received;
+    fd_set set;
+    struct timeval timeout;
+
+   
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if(sock == -1)
+        kill("Socket error!");
+
+    
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+
+   
+    memset((char *)&my_address, 0, addr_len);
+    my_address.sin_family = AF_INET;
+    my_address.sin_port = htons(DEFAULT_PORT);
+    my_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    
+    other_address.sin_family = AF_INET;
+    other_address.sin_port = htons(atoi(argv[3]));
+    other_address.sin_addr.s_addr = inet_addr(argv[2]);
+
+    
+    if(bind(sock, (struct sockaddr*)&my_address, addr_len) == -1){
+        kill("Bind error!");
+    }
+
+   
+    fd = fopen(argv[1],"rb");
+    if(fd == NULL)
+        kill("File not found!");
+
+    file_size = fsize(&fd);
+    packets_to_send = packets_counter(file_size);
+
+    
+    char *file = malloc((sizeof(char) * file_size));
+
+    if(file == NULL)
+        kill("Memory error!");
+    if(fread(file, 1, file_size, fd) != file_size)
+        kill("Copy error!");
+
+    
+
+    FD_ZERO(&set); 
+    FD_SET(sock, &set); 
+
+  
+    
+    timeout.tv_sec = SOCKET_READ_TIMEOUT_SEC;
+    timeout.tv_usec = 0;
+
+
+   
+    while(hasContent()){
+
+       
+        size = copy_size(file_size, packets_send + 1);
+
+      
+        buffer[0] = atual_ack;
+
+       
+        if(size > 0)
+            memcpy(buffer + 1, file + start, size);
+
+        
+        start += size;
+
+
+      
+        while(enable_send && packs_to_expire != LIMITE){
+
+        
+            if(sendto(sock, buffer, (unsigned long) (size + 1), 0, (struct sockaddr*)&other_address, addr_len) == -1)
+                kill("Send failed!");
+
+            rv = select(sock + 1, &set, NULL, NULL, &timeout);
+
+
+            if (rv == SOCKET_ERROR)     
+                kill("Socket error!");
+            else if (rv == 0){          
+
+               
+                packs_to_expire++;
+
+               
+                timeout.tv_usec = 0;
+                timeout.tv_sec = SOCKET_READ_TIMEOUT_SEC;
+                FD_ZERO(&set);
+                FD_SET(sock, &set);
+
+                
+            }
+            else{  
+                if (recvfrom(sock, buffer, BUFSIZE, 0, (struct sockaddr*)&my_address, &addr_len) == SOCKET_ERROR)
+                    kill("Error receiving!");
+                else{
+
+                    
+                    if(buffer[0] == (atual_ack + 2)){
+                        atual_ack = ack(atual_ack);
+                        enable_send = false;
+                        
+                    }
+
+                    else{
+                        packs_to_expire++;
+                        
+                    }
+                }
+            }
+        }
+
+      
+        enable_send = true;
+
+       
+        if(packs_to_expire == LIMITE){
+            kill("No response! Stopping!");
+        }
+
+        
+        memset(buffer, 0, BUFSIZE);
+
+        packs_to_expire = 0;
+        packets_send++;
+        timeout.tv_usec = 0;
+        timeout.tv_sec = SOCKET_READ_TIMEOUT_SEC;
+    }
+     printf("File sent\n");
+    if(fclose(fd) != 0)
+        kill("Error during file closing!");
+
+    if(close(sock) != 0)
+        kill("Error during socket closing!");
+
+    free(file);
+    return 0;
+}

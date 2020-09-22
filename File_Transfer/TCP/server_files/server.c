@@ -1,27 +1,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/stat.h>
 #define SIZE 8
-
-void write_file(int sockfd)
+off_t count=0;
+void write_file(int new_sock)
 {
-  int n;
-  FILE *fp;
-  char *filename = "test1.BMP";
+  int n,m;
+  int fd;
   char buffer[SIZE];
-
-  fp = fopen(filename, "wb");
-  while (1) 
-  {
-    n = recv(sockfd, buffer, SIZE, 0);
-    if (n <= 0){
-      break;
-      return;
-    }
-    fprintf(fp, "%s", buffer);
-    bzero(buffer, SIZE);
-  }
+    if ((fd = open("new.BMP", O_CREAT | O_WRONLY, 0600)) == -1)
+        {
+            perror("open fail");
+            exit(3);
+        }
+      else
+        printf("[+]File opened succesfully.\n[+]Writing...\n");
+        bzero(buffer, SIZE);
+    
+        n = recv(new_sock, buffer, SIZE, 0);
+        while (n)
+        {
+            if (n == -1)
+            {
+                perror("[-]Recv fail");
+                exit(5);
+            }
+            if ((m = write(fd, buffer, n)) == -1)
+            {
+                perror("[-]Write fail");
+                exit(6);
+            }
+            count+=m;
+            
+            bzero(buffer, SIZE);
+            n = recv(new_sock, buffer, SIZE, 0);
+        }
+  close(fd);        
   return;
 }
 
@@ -37,10 +58,10 @@ int main(){
 
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if(sockfd < 0) {
-    perror("[-]Error in socket");
+    perror("Error");
     exit(1);
   }
-  printf("[+]Server socket created successfully.\n");
+  printf("Socket created successfully.\n");
 
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = port;
@@ -48,22 +69,22 @@ int main(){
 
   e = bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
   if(e < 0) {
-    perror("[-]Error in bind");
+    perror("-----Error in bind");
     exit(1);
   }
-  printf("[+]Binding successfull.\n");
+  printf("Binding DONE\n");
 
   if(listen(sockfd, 10) == 0){
-		printf("[+]Listening....\n");
+		printf("Listening....\n");
 	}else{
-		perror("[-]Error in listening");
+		perror("-----Error in listening");
     exit(1);
 	}
 
   addr_size = sizeof(new_addr);
   new_sock = accept(sockfd, (struct sockaddr*)&new_addr, &addr_size);
   write_file(new_sock);
-  printf("[+]Data written in the file successfully.\n");
+  printf("Data written.\n");
 
   return 0;
 }

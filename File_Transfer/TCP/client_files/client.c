@@ -1,21 +1,40 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/stat.h>
 #define SIZE 8
+struct sockaddr_in server_addr;
+int l = sizeof(struct sockaddr_in);
+int send_file(int fd, int sockfd)
+{
+  long int n=0,m;
+    char buf[SIZE];
 
-void send_file(FILE *fp, int sockfd){
-  int n;
-  char data[SIZE] = {0};
-
-  while(fgets(data, SIZE, fp) != NULL) {
-    if (send(sockfd, data, sizeof(data), 0) == -1) {
-      perror("[-]Error in sending file.");
-      exit(1);
+    n = read(fd, buf, SIZE);
+  while (n)
+  {
+    if (n == -1)
+    {
+      perror("[-]Read fail\n");
+      return EXIT_FAILURE;
     }
-    bzero(data, SIZE);
+    
+    m = sendto(sockfd, buf, n, 0, (struct sockaddr *)&server_addr, l);
+    if (m == -1)
+    {
+      perror("[-]Send error\n");
+      return EXIT_FAILURE;
+    }
+    bzero(buf, SIZE);
+    n = read(fd, buf, SIZE);
   }
+  m = sendto(sockfd, buf, n, 0, (struct sockaddr *)&server_addr, l);
 }
 
 int main(){
@@ -25,15 +44,15 @@ int main(){
 
   int sockfd;
   struct sockaddr_in server_addr;
-  FILE *fp;
-  char *filename = "test.BMP";
+  int fp;
+  char *filename = "land.BMP";
 
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if(sockfd < 0) {
-    perror("[-]Error in socket");
+    perror("ERROR");
     exit(1);
   }
-  printf("[+]Server socket created successfully.\n");
+  printf("Socket created successfully.\n");
 
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = port;
@@ -41,21 +60,20 @@ int main(){
 
   e = connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
   if(e == -1) {
-    perror("[-]Error in socket");
+    perror("Error in socket");
     exit(1);
   }
-	printf("[+]Connected to Server.\n");
-
-  fp = fopen(filename, "r");
-  if (fp == NULL) {
-    perror("[-]Error in reading file.");
+	printf("Connected to Server.\n");
+  fp = open(filename, O_RDONLY);
+  if (fp == -1) {
+    perror("[----Error in reading file.");
     exit(1);
   }
 
   send_file(fp, sockfd);
-  printf("[+]File data sent successfully.\n");
+  printf("-------Data sent successfully.\n");
 
-	printf("[+]Closing the connection.\n");
+	printf("Closing the connection.\n");
   close(sockfd);
 
   return 0;

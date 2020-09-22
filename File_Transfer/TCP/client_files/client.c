@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <arpa/inet.h>
-#define SIZE 1024
+#define SIZE 8
 
 void send_file(FILE *fp, int sockfd){
   int n;

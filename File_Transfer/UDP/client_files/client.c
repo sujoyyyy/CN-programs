@@ -12,13 +12,10 @@
 typedef int bool;
 #define true 1
 #define false 0
-
 #define BUFSIZE 101
 #define PACKET_SIZE 100
-
 #define DEFAULT_PORT 3000
 #define PORT 67
-
 #define SOCKET_ERROR -1
 #define SOCKET_READ_TIMEOUT_SEC 2
 #define LIMITE 10

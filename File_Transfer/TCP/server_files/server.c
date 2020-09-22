@@ -2,16 +2,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
-#define SIZE 1024
+#define SIZE 8
 
-void write_file(int sockfd){
+void write_file(int sockfd)
+{
   int n;
   FILE *fp;
   char *filename = "test1.BMP";
   char buffer[SIZE];
 
-  fp = fopen(filename, "w");
-  while (1) {
+  fp = fopen(filename, "wb");
+  while (1) 
+  {
     n = recv(sockfd, buffer, SIZE, 0);
     if (n <= 0){
       break;

@@ -291,7 +291,7 @@ int main()
 	else 
 	{
 		int choice = 0;
-		printf("Enter choice of Huffman Encoding(0-const, 1-var): ");        //Choice is given to user
+		printf("Enter choice of Huffman Encoding(0 - for constant length huffman coding, 1 - for variable length huffman coding): ");        //Choice is given to user
 		scanf("%d", &choice);
 
 		Read();

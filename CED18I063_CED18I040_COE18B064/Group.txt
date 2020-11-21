@@ -1,0 +1,8 @@
+1. Prateek Agrawal (CED18I040)
+2. Sujoy Datta (CED18I063)
+3. Mihir Shri (COE18B064)
+
+Contribution Analysis: 
+Mihir: Set up the basic wireframe structure of TCP Communication and compiled the necessary steps.
+Sujoy: Set up public IP tunelled using localhost using Ngrok.
+Prateek: Cloud hosting public server using Digital Ocean.
